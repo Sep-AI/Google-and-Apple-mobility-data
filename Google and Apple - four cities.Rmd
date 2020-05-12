@@ -1,0 +1,531 @@
+---
+title: "Apples and pears? Comparing Google & Apple mobility data"
+author: "Nick Bailey, Urban Big Data Centre"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  word_document: default
+  html_document: default
+---
+
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+
+pacman::p_load(lubridate, here, ggrepel, tidyverse, rvest)
+
+```
+
+
+## Introduction
+In response to the COVID-19 epidemic, a number of private organisations have begun publishing indicators which shed light on the social, economic or environmental changes which resulted from social distancing measures or 'lockdown'. These included Google and Apple who have both produced measures of mobilty albeit using quite different methodologies. The measures are designed to inform policy decisions as well public debate, and have been widely used including by the UK government. 
+
+Criticisms have been made of such use, notably due to the lack of transparency in the construction of the measures and the absence of any commitment to consistency or continuity (see for example: http://www.ubdc.ac.uk/news-media/2020/may/tracking-lockdown-supporting-recovery-the-potential-and-the-pitfalls-of-big-data/). This note adds to the discussion by looking at what the measures show in practice. 
+
+
+## Methods
+The measures have quite different underlying methodologies. Details are very scant, but it is clear that Apple base their measure on requests for directions while Google base theirs on mobile phone locations. The two companies also cover very different geographies. In the UK, Apple covers the four nations but just four cities in England in addition, whereas Google covers 152 local areas. And as we shall see, they appear to define cities rather differently. Apple provides measures based on how people travel (driving, public transport and walking) whereas Google provides them based on where people travel (e.g. parks, workplaces or transit stations). 
+
+
+## Google data
+
+```{r google data import}
+
+# lockdown - UK
+lockdown_date <- "23-03-2020 23"
+
+# google file here (static): 
+url_google <- "https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv"
+
+# Attribution - Google (no equivalent for Apple apparent): 
+#  "If you publish results based on this data set, please cite as:
+#  Google LLC "Google COVID-19 Community Mobility Reports."
+#  https://www.google.com/covid19/mobility/ Accessed: <Date>."
+
+# read data from google
+#  set 'location' to country name is missing
+df_google <- 
+  read_csv(url_google) %>%
+  select(-sub_region_2) %>% 
+  rename_at(vars(ends_with("_percent_change_from_baseline")), 
+            funs(str_replace(., "_percent_change_from_baseline", ""))) %>%
+  rename(location = sub_region_1, 
+         country = country_region,
+         Retail_Recreation = retail_and_recreation, 
+         Grocery_Pharmacy = grocery_and_pharmacy,
+         Parks = parks, 
+         Transit_Stations = transit_stations, 
+         Workplaces = workplaces,
+         Residential = residential) %>%
+  mutate(location = case_when(is.na(location) ~ country, 
+                              TRUE ~ location)) %>%
+  mutate(location = str_replace_all(location, " ", "_"), 
+         country = str_replace_all(country, " ", "_")) %>%
+  gather(key = "category", value = "level", 
+         -c("country_region_code", "country", "location", "date")) 
+
+# latest date
+latest_date_g <- max(df_google$date)
+
+first_date_g <- min(df_google$date)
+
+# Mondays
+mondays_g <- df_google %>%
+  select(date) %>%
+  group_by(date) %>%
+  summarise() %>%
+  filter(weekdays(date) == "Monday")
+
+# UK locations
+uk_locations_g <- df_google %>%
+  filter(country == "United_Kingdom") %>%
+  group_by(location) %>%
+  summarise()
+uk_locations_g <- as.character(uk_locations_g$location)
+
+# UK cities - google
+uk_cities_g <- c("City_of_Bristol", "Glasgow_City", "Greater_London", "Greater_Manchester", "Leicestershire",  
+               "Merseyside", "Nottingham", "South_Yorkshire", "Tyne_and_Wear", "West_Midlands", 
+               "West_Yorkshire")
+
+four_cities_g <- c("West_Midlands", "West_Yorkshire", "Greater_London", "Greater_Manchester")
+
+
+```
+
+Google puts out data on the basis of trip destinations with six categories. If we look across the four cities which are also covered by Apple (here, defined as metropolitan areas), we see a very high degree of similarity in the changes. 
+
+* Grocery and Pharmacy rose to a peak in the week before lockdown before falling to 30-40 below average
+* Trips to parks show the largest daily variation perhaps indicating the influence of weather but also possibly a lack of data points creating a large amount of noise. They are down slightly in the post-lockdown period.
+* Residential is up in every case by near-identical proportions, reflecting the fact that more of us are constrained to our home neighbourhoods through lockdown. 
+* Retail and Recreation is down by around three quarters, reflecting the closure of the great majority of destinations. 
+* Workplaces and Transit Stations also show very substantial declines, workplaces by slightly less and gradually creeping back up. 
+
+``` {r google trends four cities, fig.height=10, fig.width=12}
+
+df_google %>%
+  filter(location %in% four_cities_g &
+           category != "nox_rel" &
+           category != "nox_adj_rel") %>%
+  mutate(location = factor(location, levels = four_cities_g)) %>%
+  ggplot(aes(x=date, y=level)) +
+  geom_line(colour = "darkblue") + 
+  geom_vline(xintercept = date(dmy_h(lockdown_date)), linetype = "dashed") +
+  geom_hline(yintercept = 0, colour = "darkgrey") +
+  facet_grid(location ~ category) +
+  scale_x_date(breaks = mondays_g$date, 
+               minor_breaks = NULL) +
+  labs(
+    title = "Google relative mobility trends - four cities",
+    subtitle = "Vertical dashed line - lockdown date",
+    colour = "Activity category", 
+    x = "\nDays (w/b Monday)",
+    y = "Mobility levels", 
+    caption = paste0("\nNick Bailey, Urban Big Data Centre. Latest data: ", latest_date_g, ".",
+      "\n Data: Google COVID-19 Community Mobility Reports",
+      "\n(https://www.google.com/covid19/mobility/ - accessed: ", today(), ")")) +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  theme(legend.position = "none") 
+  
+# ggsave(here("figures", "Mobility Google four cities.png"), height = 20, width = 24, units = "cm", dpi = 300)
+
+```
+
+
+We can compare trends across the four cities through correlation coefficients, presenting these as a 'heatmap', using categories (bands) to make things clearer. We see a very high degree of similarity in the changes across the four cities. In fact, the correlations are surprisingly high. Apart from Parks, almost all the correlations are above .99. And the one exception is London in relation to grocery shopping where the correlations with the other three are .98! The policy change at this time was nationwide and actively enforced. Nevertheless, we might have expected to see more variation between the cities given they have very different industrial and spatial structures. The lower correlations for parks reinforce the idea that this measure is much more noisy, i.e. based on limited data points.
+
+
+``` {r google correlations 2, fig.height=10, fig.width=7}
+
+# fn to return all correlations between locations/categories
+cor_grp_g <- function(i){
+  temp <- df_google %>%
+    filter(location %in% locations &
+             category == i) %>%
+    select(-c(country_region_code, country)) %>%
+    spread(key = location, value = level)
+  temp2 <- as.data.frame(cor(temp[, locations], use = 'pairwise')) %>%
+    rownames_to_column(var = "location1") %>%
+    gather(key = location2, value = corr, -location1) %>%
+  mutate(category = i)
+  return(temp2)
+}
+
+cats <- as.character(levels(factor(df_google$category)))
+locations <- uk_cities_g
+
+# make correlations by category of activity
+correls <- data.frame()
+for (i in cats){
+  correls <- rbind(correls, cor_grp_g(i))
+}
+
+correls %>%
+  filter(location1 %in% four_cities_g &
+           location2 %in% four_cities_g) %>%
+  mutate(corr = case_when(corr == 1.0 ~ 0,
+                          corr >= .99 ~ 1,
+                          corr >= .98 ~ 2,
+                          corr >= .90 ~ 3,
+                          TRUE ~ 4)) %>%
+  mutate(corr = factor(corr, levels = c(0,1,2,3,4),
+                        labels = c("1.00", "> .99", ".98 - .99", ".90 - .98", 
+                                          "< .90"))) %>%
+  ggplot(aes(x=location1, y=location2)) +
+  geom_tile(aes(fill = corr)) +
+  facet_wrap(~ category, ncol = 2) +
+  labs(
+    title = "Google relative mobility - correlations between the four cities",
+    subtitle = "",
+    fill = "Correlation", 
+    x = "",
+    y = "", 
+    caption = paste0("\nNick Bailey, Urban Big Data Centre. Latest data: ", latest_date_g, ".",
+      "\n Data: Google COVID-19 Community Mobility Reports",
+      "\n(https://www.google.com/covid19/mobility/ - accessed: ", today(), ")")) +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  scale_fill_brewer(type = "seq", direction = -1, drop = FALSE)
+
+# ggsave(here("figures", "Mobility Google correlations four cities.png"), height = 20, width = 14, units = "cm", dpi = 300)
+
+```
+
+
+
+## Apple
+
+``` {r apple data import}
+
+
+# apple file here - name includes date so cycle thru to find latest
+# BUT path often needs updating as well
+for (i in 1:5) {
+  url_apple <- paste0("https://covid19-static.cdn-apple.com/covid19-mobility-data/",
+                      "2007HotfixDev51/v2/en-us/applemobilitytrends-", as.character(today()-i), ".csv")
+  df_apple <- try(read_csv(url_apple), silent = TRUE)
+  if (is.data.frame(df_apple)) {
+    break
+  }
+}
+
+# UK cities - apple
+uk_cities_a <- c("Birmingham - UK", "Leeds", "London", "Manchester")
+
+# UK nations - apple
+uk_nations_a <- c("England", "Wales", "Scotland", "Northern Ireland")
+
+# tidy data from Apple
+df_apple <- df_apple %>%
+  rename(location = region, 
+         category = transportation_type) %>%
+  mutate(country = case_when(geo_type == "country/region" ~ location, 
+                             TRUE ~ "")) %>%
+  select(geo_type, country, location, category, everything(), -alternative_name) %>%
+  mutate(country = case_when(location %in% uk_nations_a ~ "UK", 
+                             location %in% uk_cities_a ~ "UK", 
+                             TRUE ~ country)) %>%
+  mutate(location = case_when(location == "Birmingham - UK" ~ "Birmingham", 
+                              TRUE ~ location)) %>%
+  gather(key = "date", value = "level", -c(geo_type, country, location, category)) %>%
+  mutate(date = date(ymd(date))) %>%
+  mutate(location = str_replace_all(location, " ", "_"), 
+         country = str_replace_all(country, " ", "_")) 
+  
+# Mondays
+mondays_a <- df_apple %>%
+  select(date) %>%
+  group_by(date) %>%
+  summarise() %>%
+  filter(weekdays(date) == "Monday")
+
+# update UK cities - apple 
+uk_cities_a <- c("Birmingham", "Leeds", "London", "Manchester")
+
+# update UK nations - apple 
+uk_nations_a <- c("England", "Wales", "Scotland", "Northern_Ireland")
+
+# latest date
+latest_date_a <- max(df_apple$date)
+
+# save data locally
+write.csv(df_apple,
+          paste0("C:\\\\Users\\pb53b\\COVID-19\\Google mobility\\Apple mobility ",
+                 latest_date_a, ".csv"),
+          row.names=FALSE)
+
+```
+
+
+``` {r Apple trends four cities, fig.height=10, fig.width=8}
+
+# df_apple %>%
+#   filter(location %in% uk_cities_a) %>%
+#   ggplot(aes(x=date, y=level, group=location)) +
+#   geom_line(colour = "darkblue") + 
+#   geom_vline(xintercept = date(dmy_h(lockdown_date)), linetype = "dashed") +
+#   geom_hline(yintercept = 0, colour = "darkgrey") +
+#   facet_grid(location ~ category) +
+#   scale_x_date(breaks = mondays_a$date, 
+#                minor_breaks = NULL) +
+#   labs(
+#     title = "Apple relative mobility trends - four cities",
+#     subtitle = "",
+#     x = "\nDays (w/b Monday)",
+#     y = "Mobility levels", 
+#     caption = paste0("\nNick Bailey, Urban Big Data Centre. Latest data: ", latest_date_a, ".",
+#       "\n Data: Apple Mobility Reports",
+#       "\n(https://www.apple.com/covid19/mobility - accessed: ", today(), ")")) +
+#   theme(axis.text.x = element_text(angle = 90)) 
+#   
+# ggsave(here("figures", "Mobility Apple four cities not rebased.png"), height = 20, width = 16, units = "cm", dpi = 300)
+
+```
+
+To make comparisons, it helps to put the Apple data on same basis as the Google data. Apple provides the data scaled relative to a single day in January (13th) so variations across the days of the week are captured by the measure whereas Google scales data relative to the median for that weekday removing weekly cycles. It also uses a five week period (early Jan to early Feb). With Apple, the index day is set to 100 compared with zero for Google. We therefore rescale the Apple data by taking a similar five week period (the five weeks up to 17th February as these were the earliest available), take the median activity level for each weekday and adjust all the data to be relative to those benchmarks, rescaling so that the benchmark period is zero rather than 100. 
+
+The figure shows very dramatic drops in all three categories. Whereas use of public transport remains very low (around 75-90% below pre-lockdown levels), driving is showing clear signs of bouncing back - albeit that it remains well below the benchmark period. Perhaps surprisingly, walking is down by a similar amount to driving. 
+
+
+``` {r Apple trends re-based, fig.height=10, fig.width=8}
+
+# using 5-week period 13/1 to 16/2, make median for weekday and adjust level 
+# - mainly overlaps Google's 5-wks 3/1-06/2
+# - use of median here means data in 5-wk period may not average to zero
+df_adjust <- df_apple %>%
+  filter(country == "UK") %>%
+  filter(date < ymd("2020-02-17")) %>%
+  mutate(day = weekdays(date)) %>%
+  group_by(country, location, category, day) %>%
+  summarise(level_median = median(level)) 
+
+df_apple <- df_apple %>%
+  mutate(day = weekdays(date)) %>%
+  left_join(df_adjust, by = c("country", "location", "category", "day")) %>%
+  mutate(level = (level/level_median - 1) * 100) %>%
+  select(-c(level_median, day))
+rm(df_adjust)
+
+df_apple %>%
+  filter(location %in% uk_cities_a) %>%
+  ggplot(aes(x=date, y=level, group=location)) +
+  geom_line(colour = "darkblue") + 
+  # geom_line(data = df_apple[df_apple$location %in% uk_cities_a, ], 
+  #           colour = "blue", linetype = "dashed") + 
+  geom_vline(xintercept = date(dmy_h(lockdown_date)), linetype = "dashed") +
+  geom_hline(yintercept = 0, colour = "darkgrey") +
+  facet_grid(location ~ category) +
+  scale_x_date(breaks = mondays_a$date, 
+               minor_breaks = NULL) +
+  labs(
+    title = "Apple relative mobility trends - four cities",
+    subtitle = "Re-based to similar basis as Google",
+    x = "\nDays (w/b Monday)",
+    y = "Mobility levels", 
+    caption = paste0("\nNick Bailey, Urban Big Data Centre. Latest data: ", latest_date_a, ".",
+      "\n Data: Apple Mobility Reports",
+      "\n(https://www.apple.com/covid19/mobility - accessed: ", today(), ")")) +
+  theme(axis.text.x = element_text(angle = 90))  
+  
+ggsave(here("figures", "Mobility Apple four cities.png"), height = 20, width = 16, units = "cm", dpi = 300)
+
+```
+
+As previously, we see a very high degree of correlation in the changes between cities though marginally less, especially in relation to walking. The noisiness of this measure is also apparent in the previous figure. 
+
+``` {r apple correlations, fig.height=7, fig.width=7}
+
+# fn to return all correlations between locations/categories
+cor_grp_a <- function(i){
+  temp <- df_apple %>%
+    filter(location %in% locations &
+             category == i) %>%
+    select(-c(geo_type, country)) %>%
+    spread(key = location, value = level)
+  temp2 <- as.data.frame(cor(temp[, locations], use = 'pairwise')) %>%
+    rownames_to_column(var = "location1") %>%
+    gather(key = location2, value = corr, -location1) %>%
+  mutate(category = i)
+  return(temp2)
+}
+
+cats <- as.character(levels(factor(df_apple$category)))
+locations <- uk_cities_a
+
+# make correlations by category of activity
+correls <- data.frame()
+for (i in cats){
+  correls <- rbind(correls, cor_grp_a(i))
+}
+
+correls %>%
+  mutate(corr = case_when(corr == 1.0 ~ 0,
+                          corr >= .99 ~ 1,
+                          corr >= .98 ~ 2,
+                          corr >= .90 ~ 3,
+                          TRUE ~ 4)) %>%
+  mutate(corr = factor(corr, levels = c(0,1,2,3,4),
+                        labels = c("1.00", "> .99", ".98 - .99", ".90 - .98", 
+                                          "< .90"))) %>%
+  ggplot(aes(x=location1, y=location2)) +
+  geom_tile(aes(fill = corr)) +
+  facet_wrap(~ category, ncol = 2) +
+  labs(
+    title = "Apple relative mobility - correlations between four cities",
+    subtitle = "",
+    fill = "Correlation", 
+    x = "",
+    y = "", 
+    caption = paste0("\nNick Bailey, Urban Big Data Centre. Latest data: ", latest_date_a, ".",
+      "\n Data: Apple Mobility Reports ",
+      "(https://www.apple.com/covid19/mobility - accessed: ", today(), ")")) +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  scale_fill_brewer(type = "seq", direction = -1, drop = FALSE)
+
+ggsave(here("figures", "Mobility Apple correlations four cities.png"), height = 14, width = 14, units = "cm", dpi = 300)
+
+```
+
+
+## Comparing Google and Apple
+Here we use the shorter city names from Apple as these are more familiar to most but this does not mean that the two datasets are referring to the same geographical areas. 
+
+We can start with the three Google categories for work, grocery shopping and leisure, and put these alongside Apple's measure for driving. Some smoothing is applied here and in the next two figures. There is a strong similarity between Google's measures of workplace journeys and Apple's driving measure. Both show levels gradually creeping up in the weeks after lockdown.
+
+``` {r GvA 1, fig.height=8, fig.width=10}
+
+four_cities <- data.frame(location_g = four_cities_g,
+                          location_a = uk_cities_a)
+
+df_compare <- df_google %>%
+  filter(location %in% four_cities_g) %>%
+  left_join(four_cities, by = c("location" = "location_g")) %>%
+  select(-location) %>%
+  rename(location = location_a) %>%
+  mutate(source = "Google") %>%
+  bind_rows(df_apple) %>%
+  filter(location %in% uk_cities_a) %>%
+  mutate(source = case_when(is.na(source) ~ "Apple",
+                            TRUE ~ source))
+
+cat_levels <- c("Grocery_Pharmacy", "Retail_Recreation", 
+                                      "Workplaces", "driving", 
+                                      "Transit_Stations", "transit", 
+                                      "Residential", "Parks", "walking")
+
+df_compare %>%
+  filter(category %in% cat_levels[1:4]) %>%
+  filter(date >= first_date_g) %>%
+  mutate(category = factor(category, level = cat_levels)) %>%
+  ggplot(aes(x=date, y=level)) +
+  geom_smooth(aes(colour = source), se = FALSE, span = .2) +
+  geom_line(colour = "darkgrey", size = .6) +
+  geom_vline(xintercept = date(dmy_h(lockdown_date)), linetype = "dashed") +
+  facet_grid(location ~ category) +
+  scale_x_date(breaks = mondays_a$date,
+               minor_breaks = NULL) +
+  labs(
+    title = "Google vs Apple mobility trends - retail, work & driving",
+    subtitle = "",
+    colour = "Data source",
+    x = "\nDays (w/b Monday)",
+    y = "Mobility levels",
+    caption = paste0("\nNick Bailey, Urban Big Data Centre. Data:",
+          "\n Google COVID-19 Community Mobility Reports",
+      "(https://www.google.com/covid19/mobility/) to ", latest_date_g,
+      "\n Apple Mobility Reports ",
+      "(https://www.apple.com/covid19/mobility) to ", latest_date_a)) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(legend.position = "right")
+  
+ggsave(here("figures", "Mobility G vs A 1.png"), height = 16, width = 20, units = "cm", dpi = 300)
+
+```
+
+
+
+
+Second, we can compare the two measures of public transport usage. The picture here is very similar. If anything, Apple registers even less recovery in public transport than Google. 
+
+``` {r GvA 2, fig.height=8, fig.width=6.5}
+
+df_compare %>%
+  filter(category %in% cat_levels[5:6]) %>%
+  filter(date >= first_date_g) %>%
+  mutate(category = factor(category, level = cat_levels)) %>%
+  ggplot(aes(x=date, y=level)) +
+  geom_smooth(aes(colour = source), se = FALSE, span = .2) +
+  geom_line(colour = "darkgrey", size = .6) +
+  geom_vline(xintercept = date(dmy_h(lockdown_date)), linetype = "dashed") +
+  facet_grid(location ~ category) +
+  scale_x_date(breaks = mondays_a$date,
+               minor_breaks = NULL) +
+  labs(
+    title = "Google vs Apple mobility measures - public transport",
+    subtitle = "",
+    colour = "Data source",
+    x = "\nDays (w/b Monday)",
+    y = "Mobility levels",
+    caption = paste0("\nNick Bailey, Urban Big Data Centre. Data:",
+          "\n Google ",
+      "(https://www.google.com/covid19/mobility/) to ", latest_date_g,
+      "\n Apple ",
+      "(https://www.apple.com/covid19/mobility) to ", latest_date_a)) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(legend.position = "right")
+  
+ggsave(here("figures", "Mobility G vs A 2.png"), height = 16, width = 12, units = "cm", dpi = 300)
+
+```
+
+Lastly, we bring together the Google measures for activity in residential areas and in parks with Apple's measures of walking. Here there is a striking difference. Google shows increased activity in areas around the home and broadly stable activity in parks which suggest people people are being physically active. By contrast, Apple shows a decline in levels of walking of around 60-75% across the four cities. 
+
+One possibility is that this reflects differences in geographical areas covered. If the Apple data do refer to the core local authority rather than the whole city-region, part of the drop they record may reflect the absence of commuters. 
+
+On the other hand, it may be that the Apple data are reminding us that much of the walking that people do is as part of a journey which also includes driving and/or use of public transport. In this case, the Apple data are reminding us that small amounts of daily activity around the home neighbourhood may not be a substitute for the amount of exercise people get in the course of a normal day of working, studying or socialising. That may have significant longer-term implications for the nation's physical and mental health. 
+
+``` {r GvA3, fig.height=8, fig.width=8}
+
+df_compare %>%
+  filter(category %in% cat_levels[7:9]) %>%
+  filter(date >= first_date_g) %>%
+  mutate(category = factor(category, level = cat_levels)) %>%
+  ggplot(aes(x=date, y=level)) +
+  geom_smooth(aes(colour = source), se = FALSE, span = .2) +
+  geom_line(colour = "darkgrey", size = .6) +
+  geom_vline(xintercept = date(dmy_h(lockdown_date)), linetype = "dashed") +
+  facet_grid(location ~ category) +
+  scale_x_date(breaks = mondays_a$date,
+               minor_breaks = NULL) +
+  labs(
+    title = "Google vs Apple mobility measures - residential, parks and walking",
+    subtitle = "",
+    colour = "Data source",
+    x = "\nDays (w/b Monday)",
+    y = "Mobility levels",
+    caption = paste0("\nNick Bailey, Urban Big Data Centre. Data:",
+          "\n Google COVID-19 Community Mobility Reports",
+      "(https://www.google.com/covid19/mobility/) to ", latest_date_g,
+      "\n Apple Mobility Reports ",
+      "(https://www.apple.com/covid19/mobility) to ", latest_date_a)) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(legend.position = "right")
+  
+ggsave(here("figures", "Mobility G vs A 3.png"), height = 16, width = 16, units = "cm", dpi = 300)
+
+```
+
+
+## Summary
+The measures from these two companies are interesting and neatly demonstrate the power of big data to provide insights into an otherwise hard-to-measure aspect of society. At the same time, they lack transparency in the their methods so it is not clear what we are really getting, as has been noted already. 
+
+Two further questions over these data emerge from the analysis here. The first is that they seem to show an extremely high correlation in measures of change between the different cities. This raises questions about the underlying methodology and the extent to which reported measures reflect models which have been applied to the data rather than the raw data themselves. 
+
+The second is the gap between Apple's measure of walking which shows enormous decline and the measures of activity in residential areas and parks from Google which suggest no change or indeed an increase in activity. If the former measure includes the walking done in association with journeys by car or public transport, it perhaps reminds us that activity in the neighbourhood may not be a substitute the levels of physical exercise most people would get under normal conditions, going to work, study or leisure activities. On the other hand, it may be that Apple's measure which is based on trips doesn't reflect the quantity of exercise done in a given journey. Despite the similarity in the names, we don't really know what we are getting with these data - it looks rather like a case of apples and pears. 
+
+
+## Data sources and code
+Google data: Google LLC "Google COVID-19 Community Mobility Reports" (https://www.google.com/covid19/mobility/, accessed: `{r today()}`).
+
+Apple data: Apple COVID-19 Mobility Trends Reports (https://www.apple.com/covid19/mobility), accessed: `{r today()}`). 
+
+Code available from: https://github.com/nick-bailey/Google-and-Apple-mobility-data/edit/master/README.md
