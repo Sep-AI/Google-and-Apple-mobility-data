@@ -3,8 +3,8 @@ title: "Apples and pears? Comparing Google & Apple mobility data"
 author: "Nick Bailey, Urban Big Data Centre"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
-  word_document: default
   html_document: default
+  word_document: default
 ---
 
 
@@ -18,13 +18,13 @@ pacman::p_load(lubridate, here, ggrepel, tidyverse, rvest)
 
 
 ## Introduction
-In response to the COVID-19 epidemic, a number of private organisations have begun publishing indicators which shed light on the social, economic or environmental changes which resulted from social distancing measures or 'lockdown'. These included Google and Apple who have both produced measures of mobilty albeit using quite different methodologies. The measures are designed to inform policy decisions as well public debate, and have been widely used including by the UK government. 
+In response to the COVID-19 pandemic, several private organisations have begun publishing indicators that shed light on the social, economic or environmental changes resulting from ‘lockdown’. These included Google and Apple who have both produced measures of mobility, albeit using quite different methodologies. The measures are designed to inform policy decisions, as well as public debate, and have been widely used - including by the UK government.
 
-Criticisms have been made of such use, notably due to the lack of transparency in the construction of the measures and the absence of any commitment to consistency or continuity (see for example: http://www.ubdc.ac.uk/news-media/2020/may/tracking-lockdown-supporting-recovery-the-potential-and-the-pitfalls-of-big-data/). This note adds to the discussion by looking at what the measures show in practice. 
+Criticisms have been made of such use, notably due to the lack of transparency in the construction of the measures and the absence of any commitment to consistency or continuity (see for example http://www.ubdc.ac.uk/news-media/2020/may/tracking-lockdown-supporting-recovery-the-potential-and-the-pitfalls-of-big-data/). This blog adds to the discussion by looking at what the measures show in practice.
 
 
 ## Methods
-The measures have quite different underlying methodologies. Details are very scant, but it is clear that Apple base their measure on requests for directions while Google base theirs on mobile phone locations. The two companies also cover very different geographies. In the UK, Apple covers the four nations but just four cities in England in addition, whereas Google covers 152 local areas. And as we shall see, they appear to define cities rather differently. Apple provides measures based on how people travel (driving, public transport and walking) whereas Google provides them based on where people travel (e.g. parks, workplaces or transit stations). 
+The measures have quite different underlying methodologies. Details are very scant, but it is clear that Apple base their measure on requests for directions while Google base theirs on mobile phone locations. The two companies also cover very different geographies. In the UK, Apple spans the four nations but just four cities in England are covered by them, whereas Google covers 152 local areas. And as we shall see, they appear to define cities rather differently. Apple provides measures based on how people travel (driving, public transport and walking) whereas Google provides them based on where people travel (e.g. parks, workplaces or transit stations). 
 
 
 ## Google data
@@ -93,13 +93,14 @@ four_cities_g <- c("West_Midlands", "West_Yorkshire", "Greater_London", "Greater
 
 ```
 
-Google puts out data on the basis of trip destinations with six categories. If we look across the four cities which are also covered by Apple (here, defined as metropolitan areas), we see a very high degree of similarity in the changes. 
+Google puts out data based on trip destinations with six categories. If we look across the four cities which are also covered by Apple (here, defined as metropolitan areas), we see a high degree of similarity in the changes reported.
 
-* Grocery and Pharmacy rose to a peak in the week before lockdown before falling to 30-40 below average
-* Trips to parks show the largest daily variation perhaps indicating the influence of weather but also possibly a lack of data points creating a large amount of noise. They are down slightly in the post-lockdown period.
-* Residential is up in every case by near-identical proportions, reflecting the fact that more of us are constrained to our home neighbourhoods through lockdown. 
-* Retail and Recreation is down by around three quarters, reflecting the closure of the great majority of destinations. 
-* Workplaces and Transit Stations also show very substantial declines, workplaces by slightly less and gradually creeping back up. 
+* ‘Grocery’ and ‘Pharmacy’ destinations rose to a peak in the week before lockdown before falling to 30-40 below average
+* Trips to parks show the largest daily variation, perhaps indicating the influence of weather but also possibly a lack of data points creating a large amount of noise. They are down slightly in the post-lockdown period.
+* ‘Residential’ is up in every case by near-identical proportions, reflecting the fact that more of us are constrained to our home neighbourhoods through lockdown.
+* ‘Retail’ and ‘Recreation’ is down by around three quarters, reflecting the closure of the great majority of destinations.
+* ‘Workplaces’ and ‘Transit Stations’ also show very substantial declines, although the former by slightly less and this is gradually creeping back up.
+
 
 ``` {r google trends four cities, fig.height=10, fig.width=12}
 
@@ -132,7 +133,7 @@ df_google %>%
 ```
 
 
-We can compare trends across the four cities through correlation coefficients, presenting these as a 'heatmap', using categories (bands) to make things clearer. We see a very high degree of similarity in the changes across the four cities. In fact, the correlations are surprisingly high. Apart from Parks, almost all the correlations are above .99. And the one exception is London in relation to grocery shopping where the correlations with the other three are .98! The policy change at this time was nationwide and actively enforced. Nevertheless, we might have expected to see more variation between the cities given they have very different industrial and spatial structures. The lower correlations for parks reinforce the idea that this measure is much more noisy, i.e. based on limited data points.
+We can compare trends across the four cities through correlation coefficients, presenting these as a ‘heatmap’, using categories (bands) to make things clearer. We see a very high degree of similarity in the changes across the four cities. In fact, the correlations are surprisingly high. Apart from ‘Parks’, almost all the correlations are above .99. The one exception is London concerning grocery shopping where the correlations with the other three are .98! The policy change at this time was nationwide and actively enforced. Nevertheless, we might have expected to see more variation between the cities given they have very different industrial and spatial structures. The lower correlations for ‘Parks’ reinforce the idea that this measure is much noisier, i.e. based on limited data points.
 
 
 ``` {r google correlations 2, fig.height=10, fig.width=7}
@@ -201,7 +202,7 @@ correls %>%
 # BUT path often needs updating as well
 for (i in 1:5) {
   url_apple <- paste0("https://covid19-static.cdn-apple.com/covid19-mobility-data/",
-                      "2007HotfixDev51/v2/en-us/applemobilitytrends-", as.character(today()-i), ".csv")
+                      "2007HotfixDev53/v2/en-us/applemobilitytrends-", as.character(today()-i), ".csv")
   df_apple <- try(read_csv(url_apple), silent = TRUE)
   if (is.data.frame(df_apple)) {
     break
@@ -281,9 +282,9 @@ write.csv(df_apple,
 
 ```
 
-To make comparisons, it helps to put the Apple data on same basis as the Google data. Apple provides the data scaled relative to a single day in January (13th) so variations across the days of the week are captured by the measure whereas Google scales data relative to the median for that weekday removing weekly cycles. It also uses a five week period (early Jan to early Feb). With Apple, the index day is set to 100 compared with zero for Google. We therefore rescale the Apple data by taking a similar five week period (the five weeks up to 17th February as these were the earliest available), take the median activity level for each weekday and adjust all the data to be relative to those benchmarks, rescaling so that the benchmark period is zero rather than 100. 
+To make comparisons, it helps to put the Apple data on the same basis as the Google data. Apple provides the data scaled relative to a single day in January (13th) so variations across the days of the week are captured by the measure, whereas Google scales data relative to the median for that weekday removing weekly cycles. It also uses a five-week period (early January to early February). With Apple, the index day is set to 100 compared with zero for Google. We, therefore, rescale the Apple data by taking a similar five-week period (the five weeks up to 17th February as these were the earliest available), take the median activity level for each weekday and adjust all the data to be relative to those benchmarks, rescaling so that the benchmark period is zero rather than 100.
 
-The figure shows very dramatic drops in all three categories. Whereas use of public transport remains very low (around 75-90% below pre-lockdown levels), driving is showing clear signs of bouncing back - albeit that it remains well below the benchmark period. Perhaps surprisingly, walking is down by a similar amount to driving. 
+The figure shows very dramatic drops in all three categories. Whereas use of public transport remains low (around 75-90% below pre-lockdown levels), driving is showing clear signs of bouncing back - albeit that it remains well below the benchmark period. Perhaps surprisingly, walking is down by a similar amount to driving.
 
 
 ``` {r Apple trends re-based, fig.height=10, fig.width=8}
@@ -330,7 +331,7 @@ ggsave(here("figures", "Mobility Apple four cities.png"), height = 20, width = 1
 
 ```
 
-As previously, we see a very high degree of correlation in the changes between cities though marginally less, especially in relation to walking. The noisiness of this measure is also apparent in the previous figure. 
+As previously, we see a high degree of correlation in the changes between cities though marginally less, especially in relation to walking. The noisiness of this measure is also apparent in the previous figure. 
 
 ``` {r apple correlations, fig.height=7, fig.width=7}
 
@@ -387,9 +388,10 @@ ggsave(here("figures", "Mobility Apple correlations four cities.png"), height = 
 
 
 ## Comparing Google and Apple
-Here we use the shorter city names from Apple as these are more familiar to most but this does not mean that the two datasets are referring to the same geographical areas. 
+Here we use the shorter city names from Apple, as these are more familiar to most, but this does not mean that the two datasets are referring to the same geographical areas.
 
-We can start with the three Google categories for work, grocery shopping and leisure, and put these alongside Apple's measure for driving. Some smoothing is applied here and in the next two figures. There is a strong similarity between Google's measures of workplace journeys and Apple's driving measure. Both show levels gradually creeping up in the weeks after lockdown.
+We can start with the three Google categories for work, grocery shopping and leisure, and put these alongside Apple’s measure for driving. Some smoothing is applied here and in the next two figures. There is a strong similarity between Google’s measures of workplace journeys and Apple’s driving measure. Both show levels gradually creeping up in the weeks after lockdown.
+
 
 ``` {r GvA 1, fig.height=8, fig.width=10}
 
@@ -442,9 +444,7 @@ ggsave(here("figures", "Mobility G vs A 1.png"), height = 16, width = 20, units 
 ```
 
 
-
-
-Second, we can compare the two measures of public transport usage. The picture here is very similar. If anything, Apple registers even less recovery in public transport than Google. 
+Second, we can compare the two measures of public transport usage. The picture here is very similar. If anything, Apple registers even less recovery in public transport than Google.
 
 ``` {r GvA 2, fig.height=8, fig.width=6.5}
 
@@ -477,11 +477,12 @@ ggsave(here("figures", "Mobility G vs A 2.png"), height = 16, width = 12, units 
 
 ```
 
-Lastly, we bring together the Google measures for activity in residential areas and in parks with Apple's measures of walking. Here there is a striking difference. Google shows increased activity in areas around the home and broadly stable activity in parks which suggest people people are being physically active. By contrast, Apple shows a decline in levels of walking of around 60-75% across the four cities. 
+Lastly, we bring together the Google measures for activity in residential areas and in parks with Apple’s measures of walking. Here there is a striking difference. Google shows increased activity in areas around the home and broadly stable activity in parks, which suggests people are being physically active. By contrast, Apple shows a decline in levels of walking of around 60-75% across the four cities.
 
-One possibility is that this reflects differences in geographical areas covered. If the Apple data do refer to the core local authority rather than the whole city-region, part of the drop they record may reflect the absence of commuters. 
+One possibility is that this reflects differences in geographical areas covered. If the Apple data do refer to the core local authority, rather than the whole city-region, part of the drop they record may reflect the absence of commuters.
 
-On the other hand, it may be that the Apple data are reminding us that much of the walking that people do is as part of a journey which also includes driving and/or use of public transport. In this case, the Apple data are reminding us that small amounts of daily activity around the home neighbourhood may not be a substitute for the amount of exercise people get in the course of a normal day of working, studying or socialising. That may have significant longer-term implications for the nation's physical and mental health. 
+On the other hand, it may be that the Apple data are reminding us that much of the walking that people do is as part of a journey which also includes driving and/or use of public transport. In this case, the Apple data are indicating that small amounts of daily activity around the home neighbourhood may not be a substitute for the amount of exercise people get in a normal day of working, studying or socialising. That may have significant longer-term implications for the nation’s physical and mental health.
+
 
 ``` {r GvA3, fig.height=8, fig.width=8}
 
@@ -516,16 +517,18 @@ ggsave(here("figures", "Mobility G vs A 3.png"), height = 16, width = 16, units 
 
 
 ## Summary
-The measures from these two companies are interesting and neatly demonstrate the power of big data to provide insights into an otherwise hard-to-measure aspect of society. At the same time, they lack transparency in the their methods so it is not clear what we are really getting, as has been noted already. 
+The measures from these two companies are interesting and neatly demonstrate the power of big data to provide insights into an otherwise hard-to-measure aspect of society. At the same time, they lack transparency in their methods so it is not clear what we are really getting, as has been noted already.
 
-Two further questions over these data emerge from the analysis here. The first is that they seem to show an extremely high correlation in measures of change between the different cities. This raises questions about the underlying methodology and the extent to which reported measures reflect models which have been applied to the data rather than the raw data themselves. 
+Two further questions over these data emerge from the analysis here. The first is that they seem to show an extremely high correlation in measures of change between the different cities. This raises questions about the underlying methodology and the extent to which reported measures reflect models which have been applied to the data rather than the raw data themselves.
 
-The second is the gap between Apple's measure of walking which shows enormous decline and the measures of activity in residential areas and parks from Google which suggest no change or indeed an increase in activity. If the former measure includes the walking done in association with journeys by car or public transport, it perhaps reminds us that activity in the neighbourhood may not be a substitute the levels of physical exercise most people would get under normal conditions, going to work, study or leisure activities. On the other hand, it may be that Apple's measure which is based on trips doesn't reflect the quantity of exercise done in a given journey. Despite the similarity in the names, we don't really know what we are getting with these data - it looks rather like a case of apples and pears. 
+The second is the gap between Apple’s measure of walking, which shows enormous decline, and the measures of activity in residential areas and parks from Google which suggest no change - or indeed an increase - in activity. If the former measure includes the walking done in association with journeys by car or public transport, it perhaps reminds us that activity in the neighbourhood may not be a substitute for the levels of physical exercise most people would get under normal conditions. On the other hand, it may be that Apple’s measure based on trips doesn’t reflect the quantity of exercise done in a given journey. 
 
+Despite the similarity in the names, we don’t really know what we are getting with these data - it looks rather like a case of apples and pears.
+ 
 
 ## Data sources and code
-Google data: Google LLC "Google COVID-19 Community Mobility Reports" (https://www.google.com/covid19/mobility/, accessed: `{r today()}`).
+Google data: Google LLC "Google COVID-19 Community Mobility Reports" (https://www.google.com/covid19/mobility/, accessed: `r today()`).
 
-Apple data: Apple COVID-19 Mobility Trends Reports (https://www.apple.com/covid19/mobility), accessed: `{r today()}`). 
+Apple data: Apple COVID-19 Mobility Trends Reports (https://www.apple.com/covid19/mobility), accessed: `r today()`). 
 
 Code available from: https://github.com/nick-bailey/Google-and-Apple-mobility-data/edit/master/README.md
